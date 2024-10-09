@@ -5,7 +5,7 @@ from scrapy.crawler import CrawlerProcess
 from news_project import settings
 from news.models import News
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'my_django_project.settings')
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'news_project.settings')
 django.setup()
 
 class ZoomitSpider(scrapy.Spider):
@@ -26,27 +26,22 @@ class ZoomitSpider(scrapy.Spider):
     ]
 
     def parse(self, response):
-        # استخراج تگ از URL
         tag = response.url.split('/')[-2]
 
-        # یافتن تمام لینک‌های موجود در صفحه
         links = response.css('a::attr(href)').getall()
 
-        # فیلتر کردن لینک‌ها برای استخراج لینک‌های مرتبط با دسته‌بندی
         for link in links:
             if link.startswith('/'):
-                link = response.urljoin(link)  # تبدیل لینک‌های نسبی به مطلق
+                link = response.urljoin(link)
 
-            if link.startswith(response.url):  # فیلتر کردن لینک‌هایی که زیرمجموعه URL اصلی هستند
+            if link.startswith(response.url):
                 yield response.follow(link, self.parse_article, meta={'tag': tag})
 
-        # پیدا کردن لینک صفحه بعدی و ادامه scraping
         next_page = response.css('a.next::attr(href)').get()
         if next_page is not None:
             yield response.follow(next_page, self.parse)
 
     def parse_article(self, response):
-        # استخراج داده‌ها از صفحه مقاله
         tag = response.meta['tag']
         title = response.css('h1::text').get()
         content = ''.join(response.css('p::text').getall())
@@ -54,9 +49,7 @@ class ZoomitSpider(scrapy.Spider):
         source_span = ', '.join(response.css('header > div > div > div > a > div > span::text').getall())
         source = f"{source_span} - {source_href}"
 
-        # بررسی اینکه آیا داده‌ها استخراج شده‌اند یا خیر
         if title and content and source:
-            # ذخیره داده‌ها در دیتابیس Django
             News.objects.create(
                 title=title,
                 content=content,
@@ -67,11 +60,9 @@ class ZoomitSpider(scrapy.Spider):
         else:
             self.log(f"Missing data for {response.url}")
 
-# تنظیمات برای اجرای Scrapy به‌صورت برنامه‌نویسی شده
 process = CrawlerProcess(settings={
     'LOG_LEVEL': 'INFO',
 })
 
-# اجرای اسپایدر
 process.crawl(ZoomitSpider)
-process.start()  # اجرا تا زمان پایان اسپایدر متوقف نمی‌شود
+process.start()
