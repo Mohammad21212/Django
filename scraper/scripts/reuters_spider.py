@@ -11,12 +11,16 @@ import time
 import re
 import csv
 import os
+import random
 
 
 class ReutersSpider(scrapy.Spider):
     name = "reuters"
     allowed_domains = ["reuters.com"]
     start_urls = ["https://www.reuters.com/site-search/?query=Gold+Commodity"]
+
+    # Handle HTTP 401 errors
+    handle_httpstatus_list = [401]
 
     # Calculate the date 6 months ago
     six_months_ago = datetime.now() - timedelta(days=180)
@@ -25,15 +29,17 @@ class ReutersSpider(scrapy.Spider):
     custom_cookies = {
         '_lr_geo_location': 'FR',
         'datadome': '~xUKEAVqoV8Vpj4DxbT5bdWhKwv9R0uSOgiZKEEqxSBt5bmhK_kKd5xdBHINIBv4U2ISGREYMsJwTAksmR3ZtTmXFYAuuK8LxFnZCAjXv4DuYdqKT_MZPjjaIQ56D6BF',
-        'OptanonConsent': 'isGpcEnabled=0&datestamp=Tue+Oct+08+2024+20%3A54%3A21+GMT%2B0330+(Iran+Standard+Time)&version=202408.1.0&browserGpcFlag=0&isIABGlobal=false&hosts=&consentId=0c8459c9-fff4-48a4-9ccf-6287d0e4170d&interactionCount=0&isAnonUser=1&landingPath=https%3A%2F%2Fwww.reuters.com%2Fsite-search%2F%3Fquery%3DGold+Commodity&groups=1%3A1%2C3%3A1%2CSSPD_BG%3A1%2C4%3A1%2C2%3A1',
-        'reuters-geo': '{"country":"-","region":"-"}'
+        'OptanonConsent': 'isGpcEnabled=0&datestamp=Wed+Oct+09+2024+13%3A57%3A06+GMT%2B0330+(Iran+Standard+Time)&version=202408.1.0&browserGpcFlag=0&isIABGlobal=false&hosts=&consentId=0c8459c9-fff4-48a4-9ccf-6287d0e4170d&interactionCount=0&isAnonUser=1&landingPath=NotLandingPage&groups=1%3A1%2C3%3A1%2CSSPD_BG%3A1%2C4%3A1%2C2%3A1&AwaitingReconsent=false',
+        'reuters-geo': '{"country":"FR","region":"-"}'
     }
 
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.102 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': 'https://www.reuters.com/'
-    }
+    # User-Agent list for random rotation
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.132 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:93.0) Gecko/20100101 Firefox/93.0',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:91.0) Gecko/20100101 Firefox/91.0',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'
+    ]
 
     def __init__(self):
         # Set the path for CSV file inside the scripts folder
@@ -44,7 +50,7 @@ class ReutersSpider(scrapy.Spider):
         self.csv_writer = csv.writer(self.csv_file)
 
         # Write the header row to CSV
-        self.csv_writer.writerow(['Title', 'Tags', 'Author', 'Source', 'News Text'])
+        self.csv_writer.writerow(['Title', 'Tags', 'Author', 'Source', 'Content'])
 
     def start_requests(self):
         # Request the search page using Selenium for multiple offsets
@@ -59,8 +65,17 @@ class ReutersSpider(scrapy.Spider):
 
             # Use Scrapy to process extracted links
             for link in article_links:
-                yield scrapy.Request(link, headers=self.headers, cookies=self.custom_cookies,
-                                     callback=self.parse_article)
+                headers = {
+                    'User-Agent': random.choice(self.user_agents),
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Cache-Control': 'no-cache',
+                    'Referer': 'https://www.reuters.com/'
+                }
+                yield scrapy.Request(link, headers=headers, cookies=self.custom_cookies, callback=self.parse_article)
 
     def start_selenium(self, offset):
         # Initialize Selenium with Firefox
@@ -77,6 +92,7 @@ class ReutersSpider(scrapy.Spider):
         driver.get(search_url)
 
         # Add cookies
+        time.sleep(5)
         for cookie_name, cookie_value in self.custom_cookies.items():
             driver.add_cookie({
                 'name': cookie_name,
@@ -121,7 +137,7 @@ class ReutersSpider(scrapy.Spider):
 
         # Extract article content
         paragraphs = response.css('div[data-testid*="paragraph"]::text').getall()
-        news_text = ' '.join(paragraphs)
+        content = ' '.join(paragraphs)
 
         # Extract article source
         source = response.css('div.article-body__element__2p5pI p::text').get()
@@ -134,12 +150,12 @@ class ReutersSpider(scrapy.Spider):
         author_text = ', '.join(author_cleaned)
         author_text_clean = re.sub(r"\b(By|and)\b", "", author_text).strip()
 
-        # Extract tags from URL
+        # Extract tag from URL
         url_parts = response.url.split('/')[3:]
-        tags = [part for part in url_parts if '-' not in part]
+        tag = [part for part in url_parts if '-' not in part]
 
         # Write data to CSV
-        self.csv_writer.writerow([title, tags, author_text_clean, source, news_text])
+        self.csv_writer.writerow([title, tag, author_text_clean, source, content])
 
     def close(self, reason):
         # Close the CSV file when the spider finishes

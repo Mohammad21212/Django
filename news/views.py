@@ -1,7 +1,6 @@
 from django.shortcuts import render
-from rest_framework import generics
+from rest_framework import generics, filters
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import filters
 from .models import News
 from .serializers import NewsSerializer
 from .filters import NewsFilter
