@@ -1,0 +1,37 @@
+services:
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - celery_worker
+      - celery_beat
+
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+
+  celery_worker:
+    build: .
+    command: celery -A news_project worker --loglevel=info
+    depends_on:
+      - redis
+
+  celery_beat:
+    build: .
+    command: celery -A news_project beat --loglevel=info
+    depends_on:
+      - redis
+
+  flower:
+    build: .
+    command: celery -A news_project flower --port=5555
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
