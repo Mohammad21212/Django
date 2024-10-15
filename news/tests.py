@@ -32,3 +32,18 @@ class NewsAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Test News 1')
         self.assertNotContains(response, 'Test News 2')
+
+
+# http://localhost:8000/api/news/?tag=software-application
+# http://localhost:8000/api/news/?tag=wearables
+
+
+# http://localhost:8000/api/news/?keyword=سامسونگ
+# http://localhost:8000/api/news/?keyword=Microsoft
+
+
+# http://localhost:8000/api/news/?exclude_keyword=هوش مصنوعی
+# http://localhost:8000/api/news/?exclude_keyword=آفیس
+
+
+# http://localhost:8000/api/news/?keywords=سامسونگ&exclude_keyword=آفیس

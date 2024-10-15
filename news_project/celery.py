@@ -12,6 +12,12 @@ app = Celery('news_project')
 app.config_from_object('django.conf:settings', namespace='CELERY')
 app.autodiscover_tasks()
 
+# Retry broker connection on startup
+app.conf.broker_connection_retry_on_startup = True
+
+
+
+
 @app.task(bind=True)
 def debug_task(self):
     print(f'Request: {self.request!r}')

@@ -12,12 +12,13 @@ import re
 import csv
 import os
 import random
+import subprocess
 
 
 class ReutersSpider(scrapy.Spider):
     name = "reuters"
     allowed_domains = ["reuters.com"]
-    start_urls = ["https://www.reuters.com/site-search/?query=Gold+Commodity"]
+    start_urls = ["https://www.reuters.com/site-search/?query=Gold+Commodity/"]
 
     # Handle HTTP 401 errors
     handle_httpstatus_list = [401]
@@ -42,15 +43,17 @@ class ReutersSpider(scrapy.Spider):
     ]
 
     def __init__(self):
-        # Set the path for CSV file inside the scripts folder
-        csv_path = os.path.join(os.path.dirname(__file__), 'gold_commodity_news.csv')
+        csv_path = os.path.join('/app/scraper/scripts', 'gold_commodity.csv')
+        print(f"Creating CSV at {csv_path}")
+        try:
+            self.csv_file = open(csv_path, 'w', newline='', encoding='utf-8')
+            self.csv_writer = csv.writer(self.csv_file)
+            self.csv_writer.writerow(['Title', 'Tags', 'Author', 'Source', 'Content'])
+            print("CSV file created and header written.")
+        except Exception as e:
+            print(f"Error while creating CSV file: {e}")
 
-        # Create or open the CSV file for writing
-        self.csv_file = open(csv_path, 'w', newline='', encoding='utf-8')
-        self.csv_writer = csv.writer(self.csv_file)
 
-        # Write the header row to CSV
-        self.csv_writer.writerow(['Title', 'Tags', 'Author', 'Source', 'Content'])
 
     def start_requests(self):
         # Request the search page using Selenium for multiple offsets
@@ -78,32 +81,43 @@ class ReutersSpider(scrapy.Spider):
                 yield scrapy.Request(link, headers=headers, cookies=self.custom_cookies, callback=self.parse_article)
 
     def start_selenium(self, offset):
-        # Initialize Selenium with Firefox
-        firefox_options = webdriver.FirefoxOptions()
-        firefox_options.binary_location = r'C:\Users\moham\AppData\Local\Mozilla Firefox\firefox.exe'
-        firefox_options.set_preference("network.stricttransportsecurity.preloadlist", False)
-        firefox_options.set_preference("security.ssl.enable_ocsp_stapling", False)
+        # Start Xvfb and pass the command to be run
+        xvfb_command = [
+            'xvfb-run', '--auto-servernum', '--server-args', '-screen 0 1024x768x24',
+            'geckodriver'
+        ]
+        xvfb_process = subprocess.Popen(xvfb_command)
 
-        service = Service('D:\setup\geckodriver-v0.35.0-win32\geckodriver.exe')
-        driver = webdriver.Firefox(service=service, options=firefox_options)
+        try:
+            firefox_options = webdriver.FirefoxOptions()
+            firefox_options.add_argument("--headless")
+            firefox_options.add_argument('--no-sandbox')
+            firefox_options.add_argument('--disable-dev-shm-usage')
+            firefox_options.binary_location = '/usr/local/firefox/firefox'
 
-        # Go to the Reuters search page with the specified offset
-        search_url = f"https://www.reuters.com/site-search/?query=Gold+Commodity&offset={offset}"
-        driver.get(search_url)
+            # Set preferences
+            firefox_options.set_preference("network.stricttransportsecurity.preloadlist", False)
+            firefox_options.set_preference("security.ssl.enable_ocsp_stapling", False)
 
-        # Add cookies
-        time.sleep(5)
-        for cookie_name, cookie_value in self.custom_cookies.items():
-            driver.add_cookie({
-                'name': cookie_name,
-                'value': cookie_value,
-                'domain': '.reuters.com'
-            })
+            service = Service('/usr/local/bin/geckodriver')
+            driver = webdriver.Firefox(service=service, options=firefox_options)
 
-        # Reload the page after adding cookies
-        driver.get(search_url)
+            # Navigate and interact
+            search_url = f"https://www.reuters.com/site-search/?query=Gold+Commodity&offset={offset}"
+            driver.get(search_url)
 
-        return driver
+            time.sleep(5)  # Wait for page to load
+            for cookie_name, cookie_value in self.custom_cookies.items():
+                driver.add_cookie({
+                    'name': cookie_name,
+                    'value': cookie_value,
+                    'domain': '.reuters.com'
+                })
+            driver.get(search_url)
+            return driver
+
+        finally:
+            xvfb_process.terminate()  # Ensure Xvfb is stopped after Selenium finishes
 
     def extract_links(self, driver):
         # Wait for the links to load

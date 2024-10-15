@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/4.2/ref/settings/
 
 from pathlib import Path
 from celery.schedules import crontab
+from kombu import Exchange, Queue
+
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -44,6 +46,7 @@ INSTALLED_APPS = [
     'news',
     'scraper',
     'django_extensions',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -138,13 +141,16 @@ REST_FRAMEWORK = {
 CELERY_BROKER_URL = 'redis://redis:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_BACKEND = 'redis://redis:6379/0'
+CELERY_BEAT_SCHEDULE_FILENAME = None
 
 
 CELERY_BEAT_SCHEDULE = {
-    'collect-news-every-30-minutes': {
+    'collect-news-every-3-minutes': {
         'task': 'scraper.tasks.collect_news_task',
-        'schedule': crontab(minute='*/30'),
+        'schedule': crontab(minute='*/3'),
     },
 }
 
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers.DatabaseScheduler'
 

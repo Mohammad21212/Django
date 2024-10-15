@@ -4,34 +4,52 @@ services:
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/app
+      - ./db.sqlite3:/app/db.sqlite3
     ports:
       - "8000:8000"
     depends_on:
       - redis
       - celery_worker
       - celery_beat
+    networks:
+      - app_network
 
   redis:
     image: "redis:alpine"
     ports:
       - "6379:6379"
+    networks:
+      - app_network
 
   celery_worker:
     build: .
-    command: celery -A news_project worker --loglevel=info
+    command: celery -A news_project worker -Q scrapy_tasks --concurrency=1 --loglevel=info -E
+    volumes:
+      - ./scraper/scripts:/app/scraper/scripts
+      - ./db.sqlite3:/app/db.sqlite3
     depends_on:
       - redis
+    networks:
+      - app_network
 
   celery_beat:
     build: .
     command: celery -A news_project beat --loglevel=info
     depends_on:
       - redis
+    networks:
+      - app_network
 
   flower:
     build: .
-    command: celery -A news_project flower --port=5555
+    command: celery -A news_project flower --port=5555 --basic_auth=user1:password1
     ports:
       - "5555:5555"
     depends_on:
       - redis
+    networks:
+      - app_network
+
+networks:
+  app_network:
+    driver: bridge

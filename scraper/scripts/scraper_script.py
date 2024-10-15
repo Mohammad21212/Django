@@ -1,8 +1,12 @@
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import django
 import scrapy
-from scrapy.crawler import CrawlerProcess
-from news_project import settings
+from scrapy.crawler import CrawlerRunner
+from scrapy.utils.log import configure_logging
+from twisted.internet import reactor
+
 from news.models import News
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'news_project.settings')
@@ -27,7 +31,6 @@ class ZoomitSpider(scrapy.Spider):
 
     def parse(self, response):
         tag = response.url.split('/')[-2]
-
         links = response.css('a::attr(href)').getall()
 
         for link in links:
@@ -60,9 +63,11 @@ class ZoomitSpider(scrapy.Spider):
         else:
             self.log(f"Missing data for {response.url}")
 
-process = CrawlerProcess(settings={
+configure_logging()
+runner = CrawlerRunner(settings={
     'LOG_LEVEL': 'INFO',
 })
 
-process.crawl(ZoomitSpider)
-process.start()
+d = runner.crawl(ZoomitSpider)
+d.addBoth(lambda _: reactor.stop())
+reactor.run()
