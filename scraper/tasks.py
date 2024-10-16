@@ -6,7 +6,13 @@ import os
 import csv
 import django
 
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'news_project.settings')
+CONFIG = {
+    'DJANGO_SETTINGS_MODULE': 'news_project.settings',
+    'CSV_FILE_NAME': 'gold_commodity.csv',
+    'CSV_DIR': '/app/scraper/scripts',
+}
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', CONFIG['DJANGO_SETTINGS_MODULE'])
 django.setup()
 
 @shared_task(queue='scrapy_tasks')
@@ -17,7 +23,7 @@ def collect_news_task():
     process.start()
     print("Finished running the spider")
 
-    csv_file_path = os.path.join('/app/scraper/scripts', 'gold_commodity.csv')
+    csv_file_path = os.path.join(CONFIG['CSV_DIR'], CONFIG['CSV_FILE_NAME'])
     print(f"Checking for CSV file at {csv_file_path}")
 
     if os.path.exists(csv_file_path):
@@ -38,4 +44,3 @@ def collect_news_task():
                     print(f"Error saving article to database: {e}")
     else:
         print("CSV file not found!")
-

@@ -14,36 +14,42 @@ import os
 import random
 import subprocess
 
-
-class ReutersSpider(scrapy.Spider):
-    name = "reuters"
-    allowed_domains = ["reuters.com"]
-    start_urls = ["https://www.reuters.com/site-search/?query=Gold+Commodity/"]
-
-    # Handle HTTP 401 errors
-    handle_httpstatus_list = [401]
-
-    # Calculate the date 6 months ago
-    six_months_ago = datetime.now() - timedelta(days=180)
-
-    # Custom cookies including datadome and other cookies
-    custom_cookies = {
+CONFIG = {
+    'CSV_FILE_NAME': 'gold_commodity.csv',
+    'CSV_DIR': '/app/scraper/scripts',
+    'FIREFOX_BINARY': '/usr/local/firefox/firefox',
+    'GECKO_DRIVER_PATH': '/usr/local/bin/geckodriver',
+    'START_URLS': ["https://www.reuters.com/site-search/?query=Gold+Commodity/"],
+    'CUSTOM_COOKIES': {
         '_lr_geo_location': 'FR',
         'datadome': '~xUKEAVqoV8Vpj4DxbT5bdWhKwv9R0uSOgiZKEEqxSBt5bmhK_kKd5xdBHINIBv4U2ISGREYMsJwTAksmR3ZtTmXFYAuuK8LxFnZCAjXv4DuYdqKT_MZPjjaIQ56D6BF',
         'OptanonConsent': 'isGpcEnabled=0&datestamp=Wed+Oct+09+2024+13%3A57%3A06+GMT%2B0330+(Iran+Standard+Time)&version=202408.1.0&browserGpcFlag=0&isIABGlobal=false&hosts=&consentId=0c8459c9-fff4-48a4-9ccf-6287d0e4170d&interactionCount=0&isAnonUser=1&landingPath=NotLandingPage&groups=1%3A1%2C3%3A1%2CSSPD_BG%3A1%2C4%3A1%2C2%3A1&AwaitingReconsent=false',
-        'reuters-geo': '{"country":"FR","region":"-"}'
-    }
-
-    # User-Agent list for random rotation
-    user_agents = [
+    },
+    'USER_AGENTS': [
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.132 Safari/537.36',
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:93.0) Gecko/20100101 Firefox/93.0',
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:91.0) Gecko/20100101 Firefox/91.0',
         'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.159 Safari/537.36'
     ]
+}
+
+
+class ReutersSpider(scrapy.Spider):
+    name = "reuters"
+    allowed_domains = ["reuters.com"]
+    start_urls = CONFIG['START_URLS']
+
+    handle_httpstatus_list = [401]
+
+    six_months_ago = datetime.now() - timedelta(days=180)
+
+    custom_cookies = CONFIG['CUSTOM_COOKIES']
+
+    # User-Agent list for random rotation
+    user_agents = CONFIG['USER_AGENTS']
 
     def __init__(self):
-        csv_path = os.path.join('/app/scraper/scripts', 'gold_commodity.csv')
+        csv_path = os.path.join(CONFIG['CSV_DIR'], CONFIG['CSV_FILE_NAME'])
         print(f"Creating CSV at {csv_path}")
         try:
             self.csv_file = open(csv_path, 'w', newline='', encoding='utf-8')
@@ -52,8 +58,6 @@ class ReutersSpider(scrapy.Spider):
             print("CSV file created and header written.")
         except Exception as e:
             print(f"Error while creating CSV file: {e}")
-
-
 
     def start_requests(self):
         # Request the search page using Selenium for multiple offsets
@@ -78,10 +82,15 @@ class ReutersSpider(scrapy.Spider):
                     'Cache-Control': 'no-cache',
                     'Referer': 'https://www.reuters.com/'
                 }
-                yield scrapy.Request(link, headers=headers, cookies=self.custom_cookies, callback=self.parse_article)
+                yield scrapy.Request(
+                    link,
+                    headers=headers,
+                    cookies=self.custom_cookies,
+                    callback=self.parse_article,
+                    dont_filter=True
+                )
 
     def start_selenium(self, offset):
-        # Start Xvfb and pass the command to be run
         xvfb_command = [
             'xvfb-run', '--auto-servernum', '--server-args', '-screen 0 1024x768x24',
             'geckodriver'
@@ -93,20 +102,19 @@ class ReutersSpider(scrapy.Spider):
             firefox_options.add_argument("--headless")
             firefox_options.add_argument('--no-sandbox')
             firefox_options.add_argument('--disable-dev-shm-usage')
-            firefox_options.binary_location = '/usr/local/firefox/firefox'
+            firefox_options.binary_location = CONFIG['FIREFOX_BINARY']
 
             # Set preferences
             firefox_options.set_preference("network.stricttransportsecurity.preloadlist", False)
             firefox_options.set_preference("security.ssl.enable_ocsp_stapling", False)
 
-            service = Service('/usr/local/bin/geckodriver')
+            service = Service(CONFIG['GECKO_DRIVER_PATH'])
             driver = webdriver.Firefox(service=service, options=firefox_options)
 
-            # Navigate and interact
             search_url = f"https://www.reuters.com/site-search/?query=Gold+Commodity&offset={offset}"
             driver.get(search_url)
 
-            time.sleep(5)  # Wait for page to load
+            time.sleep(5)
             for cookie_name, cookie_value in self.custom_cookies.items():
                 driver.add_cookie({
                     'name': cookie_name,
@@ -117,7 +125,7 @@ class ReutersSpider(scrapy.Spider):
             return driver
 
         finally:
-            xvfb_process.terminate()  # Ensure Xvfb is stopped after Selenium finishes
+            xvfb_process.terminate()
 
     def extract_links(self, driver):
         # Wait for the links to load
@@ -172,7 +180,6 @@ class ReutersSpider(scrapy.Spider):
         self.csv_writer.writerow([title, tag, author_text_clean, source, content])
 
     def close(self, reason):
-        # Close the CSV file when the spider finishes
         self.csv_file.close()
 
 

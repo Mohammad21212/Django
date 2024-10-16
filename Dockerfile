@@ -2,7 +2,6 @@ FROM python:3.9-slim
 
 WORKDIR /app
 
-# Install necessary build dependencies and required packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     build-essential \
@@ -30,19 +29,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-# Set Firefox and Geckodriver paths
 ENV PATH="/usr/local/firefox:$PATH"
 ENV PATH="/usr/local/bin:$PATH"
 
-# Ensure Xvfb uses display :99
 ENV DISPLAY=:99
 
-# Install Python dependencies
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application files
 COPY . /app/
 
-# Run the application with Xvfb for headless Firefox
 CMD ["xvfb-run", "-s", "-screen 0 1920x1080x24", "python", "manage.py", "runserver", "0.0.0.0:8000"]
